@@ -8,52 +8,75 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
     <style>
         body { font-family: sans-serif; display: flex; flex-direction: column; align-items: center; padding: 20px; background: #1a1a1a; color: white; }
-        .container { max-width: 500px; width: 100%; background: #2d2d2d; padding: 25px; border-radius: 15px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
+        .container { max-width: 500px; width: 100%; background: #2d2d2d; padding: 25px; border-radius: 15px; }
         textarea, input { width: 100%; margin-bottom: 15px; border-radius: 8px; border: 1px solid #444; padding: 12px; box-sizing: border-box; background: #3d3d3d; color: white; }
         button { width: 100%; padding: 14px; background: #ff4757; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; }
-        #qrcode { margin-top: 25px; background: white; padding: 15px; border-radius: 10px; display: none; justify-content: center; }
-        h2 { text-align: center; color: #ff4757; }
+        #qrcode { display: none; }
+        canvas { max-width: 100%; border-radius: 10px; margin-top: 20px; image-rendering: pixelated; }
     </style>
 </head>
 <body>
 
 <div class="container">
     <h2>QR-Art Generator</h2>
-    <textarea id="textInput" placeholder="Текст сообщения..."></textarea>
-    <input type="text" id="keyInput" placeholder="Ключ (опционально)...">
-    <button onclick="processData()">Создать QR</button>
+    <textarea id="textInput" placeholder="Текст ||| Ключ"></textarea>
+    <button onclick="processData()">Создать QR-Art</button>
     <div id="qrcode"></div>
+    <canvas id="mainCanvas"></canvas>
 </div>
 
 <script>
     const PREFIX = "*";
 
     function processData() {
-        const text = document.getElementById('textInput').value;
-        const key = document.getElementById('keyInput').value;
+        let input = document.getElementById('textInput').value;
         const qrContainer = document.getElementById('qrcode');
+        const canvas = document.getElementById('mainCanvas');
+        const ctx = canvas.getContext('2d');
+
+        let text = input;
+        let key = "";
+
+        if (input.includes("|||")) {
+            const parts = input.split("|||");
+            text = parts[0].trim();
+            key = parts[1].trim();
+        }
 
         if (!text) return alert("Введите текст!");
 
         let dataToEncode = text;
-
         if (key) {
-            // Шифруем и добавляем короткий префикс *
-            const encrypted = CryptoJS.AES.encrypt(text, key).toString();
-            dataToEncode = PREFIX + encrypted;
+            dataToEncode = PREFIX + CryptoJS.AES.encrypt(text, key).toString();
         }
 
         qrContainer.innerHTML = "";
-        qrContainer.style.display = "flex";
+        new QRCode(qrContainer, { text: dataToEncode, width: 256, height: 256, correctLevel: QRCode.CorrectLevel.H });
 
-        new QRCode(qrContainer, {
-            text: dataToEncode,
-            width: 256,
-            height: 256,
-            colorDark: "#000000",
-            colorLight: "#ffffff",
-            correctLevel: QRCode.CorrectLevel.H
-        });
+        setTimeout(() => {
+            const qrImg = qrContainer.querySelector('img');
+            canvas.width = 256;
+            canvas.height = 256;
+            ctx.drawImage(qrImg, 0, 0);
+
+            // RGB МАГИЯ
+            const imageData = ctx.getImageData(0, 0, 256, 256);
+            const data = imageData.data;
+
+            for (let i = 0; i < data.length; i += 4) {
+                const isDark = data[i] < 128; // Проверяем черный ли пиксель QR
+                
+                // Красный и Зеленый (R, G) — создаем "шум" (будущий орнамент)
+                data[i] = Math.random() * 255;     // Red
+                data[i+1] = Math.random() * 255;   // Green
+                
+                // Синий (B) — здесь живет QR
+                data[i+2] = isDark ? 0 : 255;      // Blue
+                
+                data[i+3] = 255; // Альфа-канал (прозрачность)
+            }
+            ctx.putImageData(imageData, 0, 0);
+        }, 150);
     }
 </script>
 
