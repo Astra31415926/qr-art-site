@@ -9,10 +9,11 @@
     <style>
         body { font-family: sans-serif; display: flex; flex-direction: column; align-items: center; padding: 20px; background: #1a1a1a; color: white; }
         .container { max-width: 500px; width: 100%; background: #2d2d2d; padding: 25px; border-radius: 15px; }
-        textarea, input { width: 100%; margin-bottom: 15px; border-radius: 8px; border: 1px solid #444; padding: 12px; box-sizing: border-box; background: #3d3d3d; color: white; }
+        textarea { width: 100%; height: 80px; margin-bottom: 15px; border-radius: 8px; border: 1px solid #444; padding: 12px; box-sizing: border-box; background: #3d3d3d; color: white; resize: none; }
         button { width: 100%; padding: 14px; background: #ff4757; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; }
         #qrcode { display: none; }
-        canvas { max-width: 100%; border-radius: 10px; margin-top: 20px; image-rendering: pixelated; }
+        canvas { max-width: 100%; border-radius: 10px; margin-top: 20px; image-rendering: pixelated; box-shadow: 0 0 20px rgba(0,0,0,0.5); }
+        .info { margin-top: 10px; font-size: 0.8em; color: #888; }
     </style>
 </head>
 <body>
@@ -23,6 +24,7 @@
     <button onclick="processData()">Создать QR-Art</button>
     <div id="qrcode"></div>
     <canvas id="mainCanvas"></canvas>
+    <div class="info">Синий канал = QR | Красный/Зеленый = Орнамент</div>
 </div>
 
 <script>
@@ -36,7 +38,6 @@
 
         let text = input;
         let key = "";
-
         if (input.includes("|||")) {
             const parts = input.split("|||");
             text = parts[0].trim();
@@ -51,6 +52,7 @@
         }
 
         qrContainer.innerHTML = "";
+        // Используем уровень H для максимальной выживаемости кода
         new QRCode(qrContainer, { text: dataToEncode, width: 256, height: 256, correctLevel: QRCode.CorrectLevel.H });
 
         setTimeout(() => {
@@ -59,21 +61,31 @@
             canvas.height = 256;
             ctx.drawImage(qrImg, 0, 0);
 
-            // RGB МАГИЯ
             const imageData = ctx.getImageData(0, 0, 256, 256);
             const data = imageData.data;
+            
+            // Размер блока для орнамента (как в твоем Python коде)
+            const blockSize = 16; 
 
-            for (let i = 0; i < data.length; i += 4) {
-                const isDark = data[i] < 128; // Проверяем черный ли пиксель QR
-                
-                // Красный и Зеленый (R, G) — создаем "шум" (будущий орнамент)
-                data[i] = Math.random() * 255;     // Red
-                data[i+1] = Math.random() * 255;   // Green
-                
-                // Синий (B) — здесь живет QR
-                data[i+2] = isDark ? 0 : 255;      // Blue
-                
-                data[i+3] = 255; // Альфа-канал (прозрачность)
+            for (let y = 0; y < 256; y++) {
+                for (let x = 0; x < 256; x++) {
+                    const i = (y * 256 + x) * 4;
+                    const isDark = data[i] < 128;
+
+                    // Логика блоков (псевдо-орнамент)
+                    const blockX = Math.floor(x / blockSize);
+                    const blockY = Math.floor(y / blockSize);
+                    const pattern = (blockX + blockY) % 2 === 0;
+
+                    // R и G каналы заполняем узором
+                    data[i] = pattern ? 200 : 50;      // Red канал
+                    data[i+1] = (blockX * 10) % 255;   // Green канал
+                    
+                    // B канал — строго наш QR
+                    data[i+2] = isDark ? 0 : 255;      // Blue канал
+                    
+                    data[i+3] = 255; 
+                }
             }
             ctx.putImageData(imageData, 0, 0);
         }, 150);
