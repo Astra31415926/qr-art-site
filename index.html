@@ -1,17 +1,747 @@
-Напиши один файл index.html, который позволяет:
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QR Studio — Генератор и Сканер</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
+    <style>
+        :root {
+            --bg: #0a0a0f;
+            --bg-elevated: #12121a;
+            --card: #1a1a24;
+            --border: #2a2a3a;
+            --fg: #e8e8ec;
+            --muted: #6b6b7a;
+            --accent: #00d4aa;
+            --accent-glow: rgba(0, 212, 170, 0.3);
+            --danger: #ff4757;
+        }
 
-Создавать QR-код из текста (используй библиотеку qrcodejs).
+        * {
+            box-sizing: border-box;
+        }
 
-Читать QR-код из загруженного файла (используй библиотеку jsQR).
+        body {
+            font-family: 'Space Grotesk', sans-serif;
+            background: var(--bg);
+            color: var(--fg);
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
 
-Требования к коду:
+        /* Background Pattern */
+        .bg-pattern {
+            position: fixed;
+            inset: 0;
+            z-index: 0;
+            background-image: 
+                radial-gradient(circle at 20% 20%, rgba(0, 212, 170, 0.08) 0%, transparent 50%),
+                radial-gradient(circle at 80% 80%, rgba(0, 212, 170, 0.05) 0%, transparent 40%);
+        }
 
-Современный темный дизайн.
+        .bg-pattern::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background-image: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%232a2a3a' fill-opacity='0.15'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+            opacity: 0.4;
+        }
 
-Поле ввода текста и кнопка «Создать».
+        /* Grid lines animation */
+        .grid-lines {
+            position: fixed;
+            inset: 0;
+            z-index: 0;
+            background: 
+                linear-gradient(90deg, var(--border) 1px, transparent 1px),
+                linear-gradient(var(--border) 1px, transparent 1px);
+            background-size: 80px 80px;
+            opacity: 0.05;
+            animation: gridMove 20s linear infinite;
+        }
 
-Кнопка «Выбрать файл» для сканирования.
+        @keyframes gridMove {
+            0% { transform: translate(0, 0); }
+            100% { transform: translate(80px, 80px); }
+        }
 
-Чистый JavaScript, библиотеки подключи через CDN.
+        /* Floating particles */
+        .particle {
+            position: fixed;
+            width: 4px;
+            height: 4px;
+            background: var(--accent);
+            border-radius: 50%;
+            pointer-events: none;
+            opacity: 0.6;
+            animation: float 15s infinite ease-in-out;
+        }
 
-Весь код (HTML, CSS, JS) должен быть в одном файле.
+        @keyframes float {
+            0%, 100% { transform: translateY(0) translateX(0); opacity: 0.6; }
+            25% { transform: translateY(-100px) translateX(20px); opacity: 0.3; }
+            50% { transform: translateY(-50px) translateX(-30px); opacity: 0.8; }
+            75% { transform: translateY(-150px) translateX(10px); opacity: 0.4; }
+        }
+
+        /* Cards */
+        .card {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            backdrop-filter: blur(20px);
+            transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        .card:hover {
+            border-color: var(--accent);
+            box-shadow: 0 0 40px var(--accent-glow);
+            transform: translateY(-4px);
+        }
+
+        /* Input styles */
+        .input-field {
+            background: var(--bg-elevated);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 16px 20px;
+            color: var(--fg);
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 14px;
+            transition: all 0.3s ease;
+            width: 100%;
+        }
+
+        .input-field:focus {
+            outline: none;
+            border-color: var(--accent);
+            box-shadow: 0 0 0 3px var(--accent-glow);
+        }
+
+        .input-field::placeholder {
+            color: var(--muted);
+        }
+
+        /* Buttons */
+        .btn {
+            position: relative;
+            padding: 14px 28px;
+            border-radius: 12px;
+            font-weight: 500;
+            font-size: 15px;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+            overflow: hidden;
+        }
+
+        .btn-primary {
+            background: var(--accent);
+            color: var(--bg);
+            border: none;
+        }
+
+        .btn-primary::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(135deg, rgba(255,255,255,0.2) 0%, transparent 50%);
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 30px var(--accent-glow);
+        }
+
+        .btn-primary:hover::before {
+            opacity: 1;
+        }
+
+        .btn-primary:active {
+            transform: translateY(0);
+        }
+
+        .btn-secondary {
+            background: transparent;
+            color: var(--fg);
+            border: 1px solid var(--border);
+        }
+
+        .btn-secondary:hover {
+            border-color: var(--accent);
+            color: var(--accent);
+        }
+
+        /* File input */
+        .file-input-wrapper {
+            position: relative;
+            border: 2px dashed var(--border);
+            border-radius: 16px;
+            padding: 40px 20px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .file-input-wrapper:hover,
+        .file-input-wrapper.dragover {
+            border-color: var(--accent);
+            background: rgba(0, 212, 170, 0.05);
+        }
+
+        .file-input-wrapper input {
+            position: absolute;
+            inset: 0;
+            opacity: 0;
+            cursor: pointer;
+        }
+
+        /* QR Display */
+        .qr-display {
+            background: white;
+            border-radius: 16px;
+            padding: 20px;
+            display: inline-block;
+            animation: qrAppear 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        @keyframes qrAppear {
+            0% { 
+                opacity: 0; 
+                transform: scale(0.8) rotate(-5deg); 
+            }
+            100% { 
+                opacity: 1; 
+                transform: scale(1) rotate(0deg); 
+            }
+        }
+
+        /* Result display */
+        .result-box {
+            background: var(--bg-elevated);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 20px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 13px;
+            word-break: break-all;
+            animation: slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        @keyframes slideUp {
+            0% { 
+                opacity: 0; 
+                transform: translateY(20px); 
+            }
+            100% { 
+                opacity: 1; 
+                transform: translateY(0); 
+            }
+        }
+
+        /* Tab system */
+        .tab-btn {
+            padding: 12px 24px;
+            background: transparent;
+            border: none;
+            color: var(--muted);
+            font-weight: 500;
+            cursor: pointer;
+            position: relative;
+            transition: color 0.3s;
+        }
+
+        .tab-btn.active {
+            color: var(--accent);
+        }
+
+        .tab-btn::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 50%;
+            width: 0;
+            height: 2px;
+            background: var(--accent);
+            transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+            transform: translateX(-50%);
+        }
+
+        .tab-btn.active::after {
+            width: 60%;
+        }
+
+        /* Section animations */
+        .section-content {
+            animation: fadeIn 0.4s ease;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        /* Label */
+        .label {
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            color: var(--muted);
+            margin-bottom: 10px;
+            display: block;
+        }
+
+        /* Icon pulse */
+        .icon-pulse {
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 0.5; }
+            50% { opacity: 1; }
+        }
+
+        /* Stagger entrance */
+        .stagger-1 { animation-delay: 0.1s; }
+        .stagger-2 { animation-delay: 0.2s; }
+        .stagger-3 { animation-delay: 0.3s; }
+
+        /* Reduced motion */
+        @media (prefers-reduced-motion: reduce) {
+            *, *::before, *::after {
+                animation-duration: 0.01ms !important;
+                animation-iteration-count: 1 !important;
+                transition-duration: 0.01ms !important;
+            }
+        }
+
+        /* Preview image */
+        .preview-image {
+            max-width: 100%;
+            max-height: 300px;
+            border-radius: 12px;
+            object-fit: contain;
+            background: var(--bg-elevated);
+        }
+
+        /* Copy button */
+        .copy-btn {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            padding: 8px 12px;
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            color: var(--muted);
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .copy-btn:hover {
+            color: var(--accent);
+            border-color: var(--accent);
+        }
+
+        /* Toast */
+        .toast {
+            position: fixed;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%) translateY(100px);
+            background: var(--card);
+            border: 1px solid var(--accent);
+            color: var(--fg);
+            padding: 14px 28px;
+            border-radius: 12px;
+            font-size: 14px;
+            z-index: 1000;
+            transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        .toast.show {
+            transform: translateX(-50%) translateY(0);
+        }
+
+        /* Header underline */
+        .header-accent {
+            position: relative;
+            display: inline-block;
+        }
+
+        .header-accent::after {
+            content: '';
+            position: absolute;
+            bottom: -8px;
+            left: 0;
+            width: 60px;
+            height: 3px;
+            background: var(--accent);
+            border-radius: 2px;
+        }
+    </style>
+</head>
+<body>
+    <!-- Background elements -->
+    <div class="bg-pattern"></div>
+    <div class="grid-lines"></div>
+    
+    <!-- Floating particles -->
+    <div class="particle" style="left: 10%; top: 20%; animation-delay: 0s;"></div>
+    <div class="particle" style="left: 80%; top: 30%; animation-delay: 3s;"></div>
+    <div class="particle" style="left: 50%; top: 70%; animation-delay: 6s;"></div>
+    <div class="particle" style="left: 20%; top: 80%; animation-delay: 9s;"></div>
+    <div class="particle" style="left: 70%; top: 60%; animation-delay: 12s;"></div>
+
+    <!-- Main Content -->
+    <main class="relative z-10 min-h-screen py-12 px-4">
+        <div class="max-w-4xl mx-auto">
+            <!-- Header -->
+            <header class="text-center mb-12">
+                <div class="inline-flex items-center gap-3 mb-6">
+                    <svg width="40" height="40" viewBox="0 0 40 40" fill="none" class="icon-pulse">
+                        <rect x="4" y="4" width="12" height="12" rx="2" stroke="currentColor" stroke-width="2" style="color: var(--accent)"/>
+                        <rect x="24" y="4" width="12" height="12" rx="2" stroke="currentColor" stroke-width="2" style="color: var(--accent)"/>
+                        <rect x="4" y="24" width="12" height="12" rx="2" stroke="currentColor" stroke-width="2" style="color: var(--accent)"/>
+                        <rect x="24" y="24" width="12" height="12" rx="2" stroke="currentColor" stroke-width="2" style="color: var(--muted)"/>
+                        <rect x="28" y="28" width="4" height="4" fill="currentColor" style="color: var(--accent)"/>
+                    </svg>
+                    <h1 class="text-4xl font-bold tracking-tight header-accent">QR Studio</h1>
+                </div>
+                <p class="text-lg" style="color: var(--muted)">Создавайте и сканируйте QR-коды мгновенно</p>
+            </header>
+
+            <!-- Tabs -->
+            <div class="flex justify-center mb-8 border-b" style="border-color: var(--border)">
+                <button class="tab-btn active" data-tab="generate">
+                    <span class="flex items-center gap-2">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <rect x="3" y="3" width="7" height="7"/>
+                            <rect x="14" y="3" width="7" height="7"/>
+                            <rect x="14" y="14" width="7" height="7"/>
+                            <rect x="3" y="14" width="7" height="7"/>
+                        </svg>
+                        Создать QR
+                    </span>
+                </button>
+                <button class="tab-btn" data-tab="scan">
+                    <span class="flex items-center gap-2">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+                            <circle cx="12" cy="13" r="4"/>
+                        </svg>
+                        Сканировать
+                    </span>
+                </button>
+            </div>
+
+            <!-- Generate Section -->
+            <section id="generate-section" class="section-content">
+                <div class="card p-8">
+                    <label class="label">Введите текст или ссылку</label>
+                    <textarea 
+                        id="qr-input" 
+                        class="input-field mb-6" 
+                        rows="3" 
+                        placeholder="https://example.com или любой текст..."
+                    ></textarea>
+                    
+                    <button id="generate-btn" class="btn btn-primary w-full">
+                        <span class="flex items-center justify-center gap-2">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+                            </svg>
+                            Создать QR-код
+                        </span>
+                    </button>
+
+                    <div id="qr-result" class="mt-8 text-center hidden">
+                        <div class="qr-display inline-block" id="qr-code"></div>
+                        <button id="download-btn" class="btn btn-secondary mt-6">
+                            <span class="flex items-center justify-center gap-2">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                                    <polyline points="7 10 12 15 17 10"/>
+                                    <line x1="12" y1="15" x2="12" y2="3"/>
+                                </svg>
+                                Скачать PNG
+                            </span>
+                        </button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Scan Section -->
+            <section id="scan-section" class="section-content hidden">
+                <div class="card p-8">
+                    <label class="label">Загрузите изображение с QR-кодом</label>
+                    
+                    <div class="file-input-wrapper" id="dropzone">
+                        <input type="file" id="file-input" accept="image/*">
+                        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="mx-auto mb-4" style="color: var(--muted)">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                            <polyline points="17 8 12 3 7 8"/>
+                            <line x1="12" y1="3" x2="12" y2="15"/>
+                        </svg>
+                        <p style="color: var(--muted)">Перетащите файл сюда или нажмите для выбора</p>
+                        <p class="text-sm mt-2" style="color: var(--border)">PNG, JPG, GIF до 10MB</p>
+                    </div>
+
+                    <div id="scan-result" class="mt-8 hidden">
+                        <div class="text-center mb-6">
+                            <img id="preview-image" class="preview-image mx-auto" alt="Preview">
+                        </div>
+                        
+                        <div class="relative">
+                            <label class="label">Результат сканирования</label>
+                            <div id="decoded-text" class="result-box"></div>
+                            <button class="copy-btn" id="copy-btn">Копировать</button>
+                        </div>
+                    </div>
+
+                    <div id="scan-error" class="mt-8 hidden">
+                        <div class="result-box" style="border-color: var(--danger); color: var(--danger);">
+                            <span class="flex items-center gap-2">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <circle cx="12" cy="12" r="10"/>
+                                    <line x1="15" y1="9" x2="9" y2="15"/>
+                                    <line x1="9" y1="9" x2="15" y2="15"/>
+                                </svg>
+                                QR-код не найден на изображении
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Footer -->
+            <footer class="text-center mt-12" style="color: var(--muted)">
+                <p class="text-sm">Данные обрабатываются локально в вашем браузере</p>
+            </footer>
+        </div>
+    </main>
+
+    <!-- Toast -->
+    <div id="toast" class="toast">Скопировано в буфер обмена</div>
+
+    <script>
+        // DOM Elements
+        const tabBtns = document.querySelectorAll('.tab-btn');
+        const generateSection = document.getElementById('generate-section');
+        const scanSection = document.getElementById('scan-section');
+        const qrInput = document.getElementById('qr-input');
+        const generateBtn = document.getElementById('generate-btn');
+        const qrResult = document.getElementById('qr-result');
+        const qrCodeContainer = document.getElementById('qr-code');
+        const downloadBtn = document.getElementById('download-btn');
+        const fileInput = document.getElementById('file-input');
+        const dropzone = document.getElementById('dropzone');
+        const scanResult = document.getElementById('scan-result');
+        const scanError = document.getElementById('scan-error');
+        const previewImage = document.getElementById('preview-image');
+        const decodedText = document.getElementById('decoded-text');
+        const copyBtn = document.getElementById('copy-btn');
+        const toast = document.getElementById('toast');
+
+        let currentQRCode = null;
+
+        // Tab switching
+        tabBtns.forEach(btn => {
+            btn.addEventListener('click', () => {
+                tabBtns.forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                
+                const tab = btn.dataset.tab;
+                if (tab === 'generate') {
+                    generateSection.classList.remove('hidden');
+                    scanSection.classList.add('hidden');
+                } else {
+                    generateSection.classList.add('hidden');
+                    scanSection.classList.remove('hidden');
+                }
+            });
+        });
+
+        // Generate QR Code
+        generateBtn.addEventListener('click', () => {
+            const text = qrInput.value.trim();
+            if (!text) {
+                qrInput.focus();
+                qrInput.style.borderColor = 'var(--danger)';
+                setTimeout(() => {
+                    qrInput.style.borderColor = '';
+                }, 2000);
+                return;
+            }
+
+            // Clear previous QR
+            qrCodeContainer.innerHTML = '';
+            
+            // Generate new QR
+            currentQRCode = new QRCode(qrCodeContainer, {
+                text: text,
+                width: 200,
+                height: 200,
+                colorDark: '#0a0a0f',
+                colorLight: '#ffffff',
+                correctLevel: QRCode.CorrectLevel.H
+            });
+
+            qrResult.classList.remove('hidden');
+            qrResult.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        });
+
+        // Enter key to generate
+        qrInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && e.ctrlKey) {
+                generateBtn.click();
+            }
+        });
+
+        // Download QR Code
+        downloadBtn.addEventListener('click', () => {
+            const canvas = qrCodeContainer.querySelector('canvas');
+            if (!canvas) return;
+
+            const link = document.createElement('a');
+            link.download = 'qrcode.png';
+            link.href = canvas.toDataURL('image/png');
+            link.click();
+        });
+
+        // File input handling
+        fileInput.addEventListener('change', handleFile);
+
+        // Drag and drop
+        dropzone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropzone.classList.add('dragover');
+        });
+
+        dropzone.addEventListener('dragleave', () => {
+            dropzone.classList.remove('dragover');
+        });
+
+        dropzone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropzone.classList.remove('dragover');
+            
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                handleFile({ target: { files } });
+            }
+        });
+
+        function handleFile(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            // Check file size
+            if (file.size > 10 * 1024 * 1024) {
+                showToast('Файл слишком большой (макс. 10MB)');
+                return;
+            }
+
+            // Check file type
+            if (!file.type.startsWith('image/')) {
+                showToast('Пожалуйста, выберите изображение');
+                return;
+            }
+
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                const img = new Image();
+                img.onload = () => {
+                    // Show preview
+                    previewImage.src = event.target.result;
+                    
+                    // Decode QR
+                    const canvas = document.createElement('canvas');
+                    const ctx = canvas.getContext('2d');
+                    canvas.width = img.width;
+                    canvas.height = img.height;
+                    ctx.drawImage(img, 0, 0);
+
+                    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                    const code = jsQR(imageData.data, imageData.width, imageData.height);
+
+                    if (code) {
+                        decodedText.textContent = code.data;
+                        scanResult.classList.remove('hidden');
+                        scanError.classList.add('hidden');
+                        
+                        // Check if it's a URL
+                        if (isValidURL(code.data)) {
+                            decodedText.innerHTML = `<a href="${code.data}" target="_blank" style="color: var(--accent); text-decoration: underline;">${code.data}</a>`;
+                        }
+                    } else {
+                        scanResult.classList.add('hidden');
+                        scanError.classList.remove('hidden');
+                    }
+                };
+                img.src = event.target.result;
+            };
+            reader.readAsDataURL(file);
+        }
+
+        function isValidURL(string) {
+            try {
+                new URL(string);
+                return true;
+            } catch (_) {
+                return false;
+            }
+        }
+
+        // Copy to clipboard
+        copyBtn.addEventListener('click', async () => {
+            const text = decodedText.textContent;
+            try {
+                await navigator.clipboard.writeText(text);
+                showToast('Скопировано в буфер обмена');
+            } catch (err) {
+                showToast('Ошибка копирования');
+            }
+        });
+
+        function showToast(message) {
+            toast.textContent = message;
+            toast.classList.add('show');
+            setTimeout(() => {
+                toast.classList.remove('show');
+            }, 2500);
+        }
+
+        // Animation on load
+        document.addEventListener('DOMContentLoaded', () => {
+            const cards = document.querySelectorAll('.card');
+            cards.forEach((card, i) => {
+                card.style.opacity = '0';
+                card.style.transform = 'translateY(30px)';
+                setTimeout(() => {
+                    card.style.transition = 'all 0.6s cubic-bezier(0.16, 1, 0.3, 1)';
+                    card.style.opacity = '1';
+                    card.style.transform = 'translateY(0)';
+                }, 100 + i * 100);
+            });
+        });
+
+        // Input animation
+        qrInput.addEventListener('focus', () => {
+            qrInput.parentElement.style.transform = 'scale(1.01)';
+        });
+
+        qrInput.addEventListener('blur', () => {
+            qrInput.parentElement.style.transform = '';
+        });
+    </script>
+</body>
+</html>
