@@ -3,18 +3,18 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>QR-Art Generator & Scanner</title>
+    <title>QR-Art Studio</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
     <script src="https://unpkg.com/@zxing/library@latest"></script>
     <style>
         body { font-family: sans-serif; display: flex; flex-direction: column; align-items: center; padding: 20px; background: #1a1a1a; color: white; }
-        .container { max-width: 500px; width: 100%; background: #2d2d2d; padding: 25px; border-radius: 15px; text-align: center; }
-        textarea, input { width: 100%; margin-bottom: 10px; border-radius: 8px; border: 1px solid #444; padding: 12px; box-sizing: border-box; background: #3d3d3d; color: white; }
+        .container { max-width: 500px; width: 100%; background: #2d2d2d; padding: 25px; border-radius: 15px; text-align: center; border: 1px solid #444; }
+        textarea, input[type="text"] { width: 100%; margin-bottom: 10px; border-radius: 8px; border: 1px solid #444; padding: 12px; box-sizing: border-box; background: #3d3d3d; color: white; }
         button { width: 100%; padding: 14px; background: #ff4757; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; margin-top: 10px; }
-        canvas { max-width: 100%; border-radius: 10px; margin-top: 20px; background: #000; }
-        #result { margin-top: 20px; padding: 15px; background: #444; border-radius: 8px; display: none; word-break: break-all; }
-        hr { border: 0; border-top: 1px solid #444; margin: 20px 0; }
+        canvas { max-width: 100%; border-radius: 10px; margin-top: 20px; background: #000; box-shadow: 0 0 15px rgba(0,0,0,0.5); image-rendering: pixelated; }
+        #result { margin-top: 20px; padding: 15px; background: #111; border-left: 4px solid #ff4757; display: none; text-align: left; }
+        .file-upload { margin: 20px 0; padding: 10px; border: 2px dashed #555; border-radius: 8px; }
         #qrcode { display: none; }
     </style>
 </head>
@@ -24,23 +24,23 @@
     <h2>QR-Art Studio</h2>
     
     <textarea id="textInput" placeholder="Текст ||| Ключ"></textarea>
-    <button onclick="processData()">Создать QR-Art</button>
+    <button onclick="processData()">Создать ART</button>
     
-    <hr>
-
-    <p>Прочитать QR-Art:</p>
-    <input type="file" id="fileInput" accept="image/*">
-    <div id="result"></div>
-
-    <div id="qrcode"></div>
     <canvas id="mainCanvas"></canvas>
+
+    <div class="file-upload">
+        <p>Для расшифровки:</p>
+        <input type="file" id="fileInput" accept="image/*">
+    </div>
+
+    <div id="result"></div>
+    <div id="qrcode"></div>
 </div>
 
 <script>
     const PREFIX = "*";
     const codeReader = new ZXing.BrowserQRCodeReader();
 
-    // ГЕНЕРАЦИЯ (ТВОЯ ЛОГИКА)
     function processData() {
         let input = document.getElementById('textInput').value;
         const qrContainer = document.getElementById('qrcode');
@@ -58,26 +58,30 @@
         let dataToEncode = key ? PREFIX + CryptoJS.AES.encrypt(text, key).toString() : text;
 
         qrContainer.innerHTML = "";
-        new QRCode(qrContainer, { text: dataToEncode, width: 256, height: 256, correctLevel: QRCode.CorrectLevel.H });
+        // Увеличиваем размер QR (512 вместо 256) для четкости
+        new QRCode(qrContainer, { text: dataToEncode, width: 512, height: 512, correctLevel: QRCode.CorrectLevel.H });
 
         setTimeout(() => {
             const qrImg = qrContainer.querySelector('img');
-            canvas.width = 256; canvas.height = 256;
+            canvas.width = 512; canvas.height = 512;
             ctx.drawImage(qrImg, 0, 0);
-            const imageData = ctx.getImageData(0, 0, 256, 256);
+
+            const imageData = ctx.getImageData(0, 0, 512, 512);
             const data = imageData.data;
+
             for (let i = 0; i < data.length; i += 4) {
                 const isDark = data[i] < 128;
-                data[i] = Math.random() * 200; // R
-                data[i+1] = Math.random() * 200; // G
-                data[i+2] = isDark ? 0 : 255; // B (QR)
+                
+                // Делаем орнамент (R и G) менее ярким, чтобы B-канал доминировал
+                data[i] = Math.random() * 130;     // Red
+                data[i+1] = Math.random() * 130;   // Green
+                data[i+2] = isDark ? 0 : 255;      // Blue (QR)
                 data[i+3] = 255;
             }
             ctx.putImageData(imageData, 0, 0);
-        }, 150);
+        }, 200);
     }
 
-    // ЧТЕНИЕ (НОВАЯ ЛОГИКА)
     document.getElementById('fileInput').addEventListener('change', async (e) => {
         const file = e.target.files[0];
         if (!file) return;
@@ -91,12 +95,13 @@
             canvas.height = img.height;
             ctx.drawImage(img, 0, 0);
 
-            // Выделяем СИНИЙ канал (как в Python)
             const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
             const data = imageData.data;
             for (let i = 0; i < data.length; i += 4) {
-                const b = data[i+2];
-                data[i] = data[i+1] = data[i+2] = b; // Делаем ч/б по синему каналу
+                const b = data[i+2]; 
+                // Порог: если синий > 128, это белый, иначе черный
+                const val = b > 128 ? 255 : 0;
+                data[i] = data[i+1] = data[i+2] = val;
             }
             ctx.putImageData(imageData, 0, 0);
 
@@ -107,19 +112,18 @@
                 resDiv.style.display = "block";
 
                 if (decodedText.startsWith(PREFIX)) {
-                    const key = prompt("Обнаружен зашифрованный QR! Введите ключ:");
+                    const key = prompt("Зашифровано! Введите ключ:");
                     try {
                         const encrypted = decodedText.substring(PREFIX.length);
-                        const decrypted = CryptoJS.AES.decrypt(encrypted, key).toString(CryptoJS.enc.Utf8);
-                        resDiv.innerText = "Расшифровано: " + (decrypted || "Неверный ключ!");
-                    } catch (err) {
-                        resDiv.innerText = "Ошибка дешифровки.";
-                    }
+                        const bytes = CryptoJS.AES.decrypt(encrypted, key);
+                        const decrypted = bytes.toString(CryptoJS.enc.Utf8);
+                        resDiv.innerText = decrypted ? "🔓 Текст: " + decrypted : "❌ Неверный ключ!";
+                    } catch (err) { resDiv.innerText = "❌ Ошибка ключа."; }
                 } else {
-                    resDiv.innerText = "Текст в QR: " + decodedText;
+                    resDiv.innerText = "📄 Текст: " + decodedText;
                 }
             } catch (err) {
-                alert("Не удалось найти QR-код в синем канале.");
+                alert("QR не найден. Попробуйте не сжимать фото.");
             }
         };
     });
